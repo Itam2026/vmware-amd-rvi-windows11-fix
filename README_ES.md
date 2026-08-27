@@ -12,6 +12,44 @@ Guía paso a paso para recuperar la **virtualización anidada AMD-V/RVI** en VMw
 - ESXi anidado
 - Otras VMs que necesiten AMD-V/RVI dentro de VMware
 
+## 🩺 Empieza por aquí: script de diagnóstico de solo lectura
+
+Antes de cambiar configuraciones de Windows, ejecuta el archivo incluido [`diagnose-hypervisor.ps1`](./diagnose-hypervisor.ps1).
+
+Comprueba automáticamente:
+
+- disponibilidad de AMD-V / SVM
+- `HypervisorPresent`
+- estado de VBS / Device Guard
+- características opcionales relacionadas con Hyper-V
+- configuración BCD del hipervisor
+- escenario `WindowsHello` de Device Guard
+- Secure Boot
+- estado de BitLocker
+- servicio `hvhost`
+- eventos recientes ID 2 del hipervisor de Hyper-V
+
+El script es **solo de lectura**. **No modifica** Windows, Registro, BCD, BitLocker, BIOS/UEFI ni VMware.
+
+Ejecútalo desde **PowerShell como administrador**:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\diagnose-hypervisor.ps1
+```
+
+El cambio de directiva anterior solo dura mientras esa ventana de PowerShell esté abierta.
+
+Si el script muestra:
+
+```text
+HypervisorPresent = FALSE
+```
+
+Windows ya no está reportando un hipervisor de host y normalmente puedes ir directamente al paso de VMware.
+
+---
+
 ## Error típico
 
 ```text
@@ -50,6 +88,24 @@ Si sigue en `True`, Windows todavía está cargando un hipervisor.
 
 > **Detente en cuanto `HypervisorPresent` cambie a `False`.**
 > No todos los equipos necesitan todos los pasos.
+
+---
+
+## Entorno validado
+
+El procedimiento se validó con:
+
+- ASUS TUF Gaming A16 FA607NUG
+- AMD Ryzen 7 7445HS
+- Windows 11 Pro 25H2, compilación 26200.9168
+- VMware Workstation 26.0.0.25388281
+- PNETLab v6
+
+Durante el diagnóstico se utilizó como comparación un segundo equipo AMD con Windows 11 Pro donde la virtualización anidada ya funcionaba correctamente.
+
+El último elemento que mantenía cargado el hipervisor en el equipo afectado fue el escenario `WindowsHello` de Device Guard, incluso después de que VBS ya había llegado a `0`.
+
+Ese paso final **no se presenta como una causa universal**.
 
 ---
 
@@ -540,9 +596,19 @@ Haz los cambios de forma incremental y **detente en cuanto `HypervisorPresent` s
 
 ---
 
+# Referencias
+
+- [Microsoft Learn — Win32_ComputerSystem / HypervisorPresent](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-computersystem)
+- [Microsoft Learn — BCDEdit /set](https://learn.microsoft.com/windows-hardware/drivers/devtest/bcdedit--set)
+- [Microsoft Learn — manage-bde protectors](https://learn.microsoft.com/windows-server/administration/windows-commands/manage-bde-protectors)
+- [Microsoft Learn — Windows Hello Enhanced Sign-in Security](https://learn.microsoft.com/windows-hardware/design/device-experiences/windows-hello-enhanced-sign-in-security)
+- [Broadcom VMware Community — Virtualized AMD-V/RVI is not supported on this platform](https://community.broadcom.com/vmware-cloud-foundation/discussion/virtualized-amd-vrvi-is-not-supported-on-this-platform)
+
+---
+
 ## Contribuciones
 
-Si funciona en otro AMD, versión de Windows o versión de VMware, abre un Issue/Discussion indicando:
+Si funciona en otro AMD, versión de Windows o versión de VMware, abre un Issue/Discussion indicando los datos siguientes. Si puedes, adjunta también la salida de `diagnose-hypervisor.ps1` **después de revisar que no contiene información que no quieras publicar**:
 
 ```text
 CPU:
