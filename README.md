@@ -12,6 +12,44 @@ This is useful for workloads such as:
 - Nested ESXi
 - Other VMs that need AMD-V/RVI exposed to the guest
 
+## 🩺 Start here: read-only diagnostic script
+
+Before changing Windows settings, run the included [`diagnose-hypervisor.ps1`](./diagnose-hypervisor.ps1).
+
+It checks:
+
+- AMD-V / SVM availability
+- `HypervisorPresent`
+- VBS / Device Guard status
+- Hyper-V-related optional features
+- BCD hypervisor settings
+- the Device Guard `WindowsHello` scenario
+- Secure Boot
+- BitLocker status
+- the `hvhost` service
+- recent Hyper-V hypervisor Event ID 2 entries
+
+The script is **read-only**. It does **not** change Windows, the registry, BCD, BitLocker, BIOS/UEFI, or VMware.
+
+Run it from **PowerShell as Administrator**:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\diagnose-hypervisor.ps1
+```
+
+The execution-policy change above applies only to the current PowerShell process.
+
+If the script reports:
+
+```text
+HypervisorPresent = FALSE
+```
+
+Windows is no longer reporting a host hypervisor and you can usually skip directly to the VMware step.
+
+---
+
 ## The error
 
 VMware may show:
@@ -57,9 +95,17 @@ If it is still `True`, Windows is still loading a hypervisor.
 
 ## Tested environment
 
-This procedure was validated on a Windows 11 Pro 25H2 AMD laptop using VMware Workstation 26 and PNETLab v6.
+This procedure was validated on:
 
-The final cause in that specific system was a Device Guard `WindowsHello` scenario that kept the Microsoft hypervisor loaded even after VBS had already reached `0`.
+- ASUS TUF Gaming A16 FA607NUG
+- AMD Ryzen 7 7445HS
+- Windows 11 Pro 25H2, build 26200.9168
+- VMware Workstation 26.0.0.25388281
+- PNETLab v6
+
+A second AMD Windows 11 Pro system where nested virtualization already worked was used as a comparison host during diagnosis.
+
+The final cause in the affected system was a Device Guard `WindowsHello` scenario that kept the Microsoft hypervisor loaded even after VBS had already reached `0`.
 
 That final registry step is **not claimed to be universal**.
 
@@ -538,21 +584,6 @@ Protection Status: Protection On
 
 ---
 
-# Quick diagnostic script
-
-This repository also includes `diagnose-hypervisor.ps1`.
-
-Run it from an elevated PowerShell window:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\diagnose-hypervisor.ps1
-```
-
-It only **reads** system state. It does not modify Windows, the registry, BCD, BitLocker, or firmware.
-
----
-
 # Why `HypervisorPresent` matters
 
 The most important lesson from this troubleshooting case was:
@@ -601,17 +632,17 @@ Use the guide incrementally and **stop as soon as `HypervisorPresent` becomes `F
 
 # References
 
-- Microsoft Learn — `Win32_ComputerSystem` / `HypervisorPresent`
-- Microsoft Learn — BCDEdit hypervisor launch settings
-- Microsoft Learn — BitLocker `manage-bde -protectors`
-- Microsoft Learn — Windows Hello Enhanced Sign-in Security
-- Broadcom VMware Community — “Virtualized AMD-V/RVI is not supported on this platform”
+- [Microsoft Learn — Win32_ComputerSystem / HypervisorPresent](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-computersystem)
+- [Microsoft Learn — BCDEdit /set](https://learn.microsoft.com/windows-hardware/drivers/devtest/bcdedit--set)
+- [Microsoft Learn — manage-bde protectors](https://learn.microsoft.com/windows-server/administration/windows-commands/manage-bde-protectors)
+- [Microsoft Learn — Windows Hello Enhanced Sign-in Security](https://learn.microsoft.com/windows-hardware/design/device-experiences/windows-hello-enhanced-sign-in-security)
+- [Broadcom VMware Community — Virtualized AMD-V/RVI is not supported on this platform](https://community.broadcom.com/vmware-cloud-foundation/discussion/virtualized-amd-vrvi-is-not-supported-on-this-platform)
 
 ---
 
 ## Contributing
 
-If this guide works on a different AMD CPU, Windows build, laptop model, or VMware Workstation version, please open an Issue or Discussion and include:
+If this guide works on a different AMD CPU, Windows build, laptop model, or VMware Workstation version, please open an Issue or Discussion and include the following. If useful, you can also attach the output of `diagnose-hypervisor.ps1` **after reviewing it for information you do not want to publish**:
 
 ```text
 CPU:
