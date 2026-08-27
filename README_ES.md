@@ -1,8 +1,8 @@
 # VMware Workstation: solución a `Virtualized AMD-V/RVI is not supported on this platform` en Windows 11 + AMD
 
-[**English**](./README.md) | [**Español**](./README_ES.md)
+[**English**](./README.md) | [**Español**](./README_ES.md) | [**Support / Soporte**](./SUPPORT.md)
 
-Guía paso a paso para recuperar la **virtualización anidada AMD-V/RVI** en VMware Workstation.
+Guía práctica y **troubleshooter bilingüe de solo lectura** para problemas de virtualización anidada AMD-V/RVI en VMware Workstation sobre Windows 11.
 
 Útil para:
 
@@ -12,45 +12,115 @@ Guía paso a paso para recuperar la **virtualización anidada AMD-V/RVI** en VMw
 - ESXi anidado
 - Otras VMs que necesiten AMD-V/RVI dentro de VMware
 
-## 🩺 Empieza por aquí: script de diagnóstico de solo lectura
+---
 
-Antes de cambiar configuraciones de Windows, ejecuta el archivo incluido [`diagnose-hypervisor.ps1`](./diagnose-hypervisor.ps1).
+## Empieza por aquí: troubleshooter bilingüe v2
 
-Comprueba automáticamente:
-
-- disponibilidad de AMD-V / SVM
-- `HypervisorPresent`
-- estado de VBS / Device Guard
-- características opcionales relacionadas con Hyper-V
-- configuración BCD del hipervisor
-- escenario `WindowsHello` de Device Guard
-- Secure Boot
-- estado de BitLocker
-- servicio `hvhost`
-- eventos recientes ID 2 del hipervisor de Hyper-V
-
-El script es **solo de lectura**. **No modifica** Windows, Registro, BCD, BitLocker, BIOS/UEFI ni VMware.
-
-Ejecútalo desde **PowerShell como administrador**:
+Antes de cambiar configuraciones de Windows, descarga y ejecuta [`diagnose-hypervisor.ps1`](./diagnose-hypervisor.ps1) desde **PowerShell como administrador**.
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\diagnose-hypervisor.ps1
 ```
 
-El cambio de directiva anterior solo dura mientras esa ventana de PowerShell esté abierta.
-
-Si el script muestra:
+El script permite elegir idioma al iniciar:
 
 ```text
-HypervisorPresent = FALSE
+[1] Espanol
+[2] English
 ```
 
-Windows ya no está reportando un hipervisor de host y normalmente puedes ir directamente al paso de VMware.
+También puedes indicarlo directamente:
+
+```powershell
+.\diagnose-hypervisor.ps1 -Language es
+.\diagnose-hypervisor.ps1 -Language en
+```
+
+### Qué hace la versión 2
+
+El troubleshooter analiza el equipo, aplica un pequeño **motor de reglas** y trata de recomendar **solo el siguiente paso relevante**, en vez de pedir a todo el mundo que desactive todas las protecciones de Windows.
+
+Comprueba:
+
+- AMD-V / SVM en firmware
+- SLAT / RVI
+- `HypervisorPresent`
+- VBS / Device Guard
+- configuración de Memory Integrity / HVCI
+- características opcionales de Windows relacionadas con Hyper-V
+- `hypervisorlaunchtype` y `vsmlaunchtype`
+- escenario `WindowsHello` de Device Guard
+- Secure Boot
+- estado de protección de BitLocker en `C:`
+- servicio `hvhost`
+- presencia de eventos recientes ID 2 del hipervisor de Hyper-V
+- versión de VMware Workstation cuando puede detectarla
+
+Ejemplo de la lógica:
+
+```text
+HypervisorPresent = TRUE
+VBS               = 0
+Hyper-V features  = Disabled
+BCD                = Off
+WindowsHello       = Enabled
+
+Recomendación:
+Revisar solamente el paso 9.
+```
+
+Después reinicias, vuelves a ejecutar el troubleshooter y solo continúas si sigue siendo necesario.
+
+### Diseñado como solo lectura
+
+El diagnóstico **no modifica**:
+
+- configuraciones de Windows
+- Registro
+- BCD
+- BitLocker
+- Secure Boot
+- BIOS/UEFI
+- características opcionales de Windows
+- VMware
+
+Puede guardar opcionalmente un **reporte sanitizado TXT y JSON**, pero nunca aplica las correcciones automáticamente.
+
+### Reporte para compartir
+
+Al terminar, el script muestra un bloque parecido a este:
+
+```text
+--- BEGIN VMWARE AMD-V/RVI DIAGNOSTIC REPORT ---
+...
+RecommendationCode=...
+RecommendedGuideStep=...
+--- END VMWARE AMD-V/RVI DIAGNOSTIC REPORT ---
+```
+
+El reporte excluye intencionalmente hostname, nombre de usuario, claves de recuperación de BitLocker, claves de producto y números de serie. Aun así, revisa siempre lo que vas a publicar.
+
+Consulta [SUPPORT.md](./SUPPORT.md) para ver cómo pegar ese reporte en GitHub Issues, ChatGPT, Broadcom Community u otro canal de soporte.
+
+Para guardarlo directamente:
+
+```powershell
+.\diagnose-hypervisor.ps1 -Language es -ExportReport
+```
+
+Crea:
+
+```text
+vmware-amd-rvi-report.txt
+vmware-amd-rvi-report.json
+```
 
 ---
 
-## Error típico
+## Error de VMware
+
+VMware puede mostrar:
 
 ```text
 Virtualized AMD-V/RVI is not supported on this platform.
@@ -65,18 +135,18 @@ Module 'FeatureCompatLate' power on failed.
 Failed to start the virtual machine.
 ```
 
-## La comprobación más importante
+## La comprobación clave
 
-No basta con mirar si Hyper-V está desmarcado o si VBS dice `0`.
+No basta con mirar si Hyper-V está desmarcado o si VBS informa `0`.
 
-Ejecuta en PowerShell como administrador:
+Ejecuta:
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
 Select-Object HypervisorPresent
 ```
 
-Para VMware con AMD-V/RVI anidado queremos:
+Para esta ruta de diagnóstico queremos llegar a:
 
 ```text
 HypervisorPresent
@@ -84,10 +154,10 @@ HypervisorPresent
 False
 ```
 
-Si sigue en `True`, Windows todavía está cargando un hipervisor.
+Si sigue en `True`, Windows todavía está reportando un hipervisor de host.
 
-> **Detente en cuanto `HypervisorPresent` cambie a `False`.**
-> No todos los equipos necesitan todos los pasos.
+> **Deja de cambiar configuraciones en cuanto `HypervisorPresent` pase a `False`.**
+> No todos los equipos necesitan todos los pasos siguientes.
 
 ---
 
@@ -103,27 +173,33 @@ El procedimiento se validó con:
 
 Durante el diagnóstico se utilizó como comparación un segundo equipo AMD con Windows 11 Pro donde la virtualización anidada ya funcionaba correctamente.
 
-El último elemento que mantenía cargado el hipervisor en el equipo afectado fue el escenario `WindowsHello` de Device Guard, incluso después de que VBS ya había llegado a `0`.
+En el equipo afectado, el último elemento que mantenía cargado el hipervisor fue un escenario `WindowsHello` de Device Guard, incluso después de que VBS ya había llegado a `0`.
 
-Ese paso final **no se presenta como una causa universal**.
+Ese hallazgo del Registro **no se presenta como una causa ni solución universal**.
 
 ---
 
-# 1. Verificar AMD-V / SVM
+# Guía manual de diagnóstico
+
+Normalmente el troubleshooter v2 te indicará qué sección corresponde revisar. La guía manual se mantiene para que el procedimiento sea transparente y para equipos donde alguna comprobación automática quede incompleta.
+
+## Paso 1 — Verificar AMD-V / SVM en firmware
+
+Abre **PowerShell como administrador**:
 
 ```powershell
 Get-CimInstance Win32_Processor |
 Select-Object Name,VirtualizationFirmwareEnabled,SecondLevelAddressTranslationExtensions
 ```
 
-Queremos:
+Esperado:
 
 ```text
 VirtualizationFirmwareEnabled           True
 SecondLevelAddressTranslationExtensions True
 ```
 
-Si aparece `False`, entra al BIOS/UEFI y habilita:
+Si la virtualización de firmware aparece en `False`, entra al BIOS/UEFI y habilita la opción equivalente a:
 
 ```text
 SVM Mode
@@ -131,11 +207,11 @@ AMD-V
 CPU Virtualization
 ```
 
-**No desactives SVM/AMD-V durante este procedimiento.**
+**Mantén SVM / AMD-V habilitado durante todo este procedimiento.**
 
 ---
 
-# 2. Comprobar si Windows está ejecutando un hipervisor
+## Paso 2 — Comprobar si Windows reporta un hipervisor
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
@@ -148,19 +224,19 @@ También:
 systeminfo
 ```
 
-Si al final aparece:
+Si `systeminfo` muestra:
 
 ```text
 Se detectó un hipervisor.
 ```
 
-Windows todavía lo está cargando.
+Windows todavía lo está cargando o reportando.
 
-Si `HypervisorPresent` ya es `False`, pasa directamente al **paso 10**.
+Si `HypervisorPresent` ya es `False`, pasa directamente al **paso 11**.
 
 ---
 
-# 3. Desactivar Integridad de memoria
+## Paso 3 — Desactivar Integridad de memoria cuando sea parte del bloqueo
 
 Ruta:
 
@@ -178,14 +254,15 @@ Desactiva:
 Integridad de memoria
 ```
 
+Reinicia cuando corresponda y vuelve a ejecutar el diagnóstico.
+
 ---
 
-# 4. Desactivar VBS por directiva de grupo
+## Paso 4 — Desactivar VBS mediante directiva de grupo
 
-En Windows 11 Pro:
+En Windows 11 Pro, pulsa `Win + R` y ejecuta:
 
 ```text
-Win + R
 gpedit.msc
 ```
 
@@ -210,17 +287,19 @@ Selecciona:
 Deshabilitada
 ```
 
+Aplica los cambios, reinicia si corresponde y vuelve a ejecutar el diagnóstico.
+
 ---
 
-# 5. Desactivar características de virtualización de Windows
+## Paso 5 — Desactivar características de virtualización de Windows que estén interfiriendo
 
-Ejecuta:
+Pulsa `Win + R` y ejecuta:
 
 ```text
 optionalfeatures
 ```
 
-Desmarca si aparecen:
+Para esta ruta de virtualización anidada en VMware, desactiva estas características si están habilitadas:
 
 ```text
 Hyper-V
@@ -230,7 +309,7 @@ Espacio aislado de Windows / Windows Sandbox
 Subsistema de Windows para Linux
 ```
 
-Comprueba el estado real con:
+Puedes verificar el estado real con PowerShell:
 
 ```powershell
 Get-WindowsOptionalFeature -Online |
@@ -238,17 +317,13 @@ Where-Object {$_.FeatureName -match "Hyper-V|VirtualMachinePlatform|HypervisorPl
 Select-Object FeatureName,State
 ```
 
-Las relevantes deberían decir:
-
-```text
-Disabled
-```
+Reinicia y vuelve a ejecutar el diagnóstico.
 
 ---
 
-# 6. Impedir el arranque del hipervisor
+## Paso 6 — Impedir el arranque del hipervisor desde BCD
 
-CMD como administrador:
+Abre **CMD como administrador**:
 
 ```cmd
 bcdedit /set {current} hypervisorlaunchtype off
@@ -261,58 +336,60 @@ Comprueba:
 bcdedit /enum {current}
 ```
 
-Queremos:
+Cuando estos valores están definidos explícitamente, el objetivo es:
 
 ```text
 hypervisorlaunchtype    Off
 vsmlaunchtype           Off
 ```
 
-Reinicia y vuelve a comprobar:
+Reinicia y comprueba nuevamente:
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
 Select-Object HypervisorPresent
 ```
 
-Si ya es `False`, pasa al **paso 10**.
+Si ya es `False`, pasa al **paso 11**.
 
 ---
 
-# 7. Comprobar VBS
+## Paso 7 — Comprobar VBS directamente
 
 ```powershell
 Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard |
 Format-List VirtualizationBasedSecurityStatus,CodeIntegrityPolicyEnforcementStatus,SecurityServicesConfigured,SecurityServicesRunning
 ```
 
-VBS desactivado debería mostrar:
+Un estado con VBS desactivado normalmente incluye:
 
 ```text
 VirtualizationBasedSecurityStatus : 0
 ```
 
-Si aparece:
+Si sigue apareciendo:
 
 ```text
 VirtualizationBasedSecurityStatus : 2
 ```
 
-VBS todavía se está ejecutando.
+VBS continúa en ejecución.
 
 ---
 
-# 8. Si VBS sigue activo: revisar Secure Boot
+## Paso 8 — Si VBS se niega a apagarse, investigar Secure Boot con cuidado
 
-> **Antes de tocar Secure Boot, revisa BitLocker.**
+> **No cambies Secure Boot sin revisar BitLocker primero.**
+
+Comprueba BitLocker:
 
 ```cmd
 manage-bde -status C:
 ```
 
-Si BitLocker está activo, asegúrate primero de tener acceso a tu **clave de recuperación**.
+Si la protección está activa, asegúrate de tener acceso a tu **clave de recuperación de BitLocker** antes de continuar. Nunca publiques esa clave.
 
-Puedes suspender temporalmente sus protectores por dos reinicios:
+Para suspender temporalmente los protectores durante dos reinicios:
 
 ```cmd
 manage-bde -protectors -disable C: -RebootCount 2
@@ -324,7 +401,7 @@ Comprueba:
 manage-bde -status C:
 ```
 
-El disco seguirá cifrado, pero los protectores estarán suspendidos temporalmente.
+El disco seguirá cifrado mientras los protectores están suspendidos temporalmente.
 
 En BIOS/UEFI mantén:
 
@@ -332,43 +409,23 @@ En BIOS/UEFI mantén:
 SVM / AMD-V = Enabled
 ```
 
-Como prueba de diagnóstico, desactiva:
+Solo como prueba de diagnóstico, Secure Boot puede desactivarse en sistemas donde VBS se niega a apagarse.
 
-```text
-Secure Boot
-```
-
-Guarda y reinicia.
-
-Comprueba:
+Después comprueba:
 
 ```powershell
 Confirm-SecureBootUEFI
 ```
 
-Para esta prueba debería devolver:
+Y vuelve a revisar VBS y `HypervisorPresent`.
 
-```text
-False
-```
-
-Vuelve a comprobar VBS y:
-
-```powershell
-Get-CimInstance Win32_ComputerSystem |
-Select-Object HypervisorPresent
-```
-
-Si ya es `False`, pasa al **paso 10**.
-
-> Secure Boot no es universalmente incompatible con VMware.
-> Este paso solo tiene sentido si VBS se niega a apagarse.
+> Secure Boot **no es universalmente incompatible con VMware**. No lo desactives si el estado del diagnóstico no apunta realmente a esta rama.
 
 ---
 
-# 9. Windows 11 24H2 / 25H2: escenario `WindowsHello` de Device Guard
+## Paso 9 — Windows 11 24H2 / 25H2: escenario `WindowsHello` de Device Guard
 
-Este fue el último elemento que mantenía el hipervisor cargado en el equipo donde se probó esta guía.
+Este fue el último elemento encontrado en el equipo donde se validó la solución.
 
 Consulta:
 
@@ -384,9 +441,9 @@ Si existe y muestra:
 Enabled    REG_DWORD    0x1
 ```
 
-y ya completaste los pasos anteriores pero `HypervisorPresent` sigue en `True`, puedes probar a deshabilitar el escenario.
+y los bloqueos anteriores ya están resueltos mientras `HypervisorPresent` sigue en `True`, este escenario puede investigarse.
 
-Antes:
+Antes de modificarlo, ve a:
 
 ```text
 Configuración
@@ -403,11 +460,9 @@ de sesión de Windows Hello para las cuentas de Microsoft
 en este dispositivo
 ```
 
-No elimines tu PIN.
+No elimines tu PIN y asegúrate de conocer la contraseña de tu cuenta Windows/Microsoft.
 
-Asegúrate de conocer la contraseña de tu cuenta Windows/Microsoft.
-
-Después, CMD como administrador:
+Después, desde **CMD como administrador**:
 
 ```cmd
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello" /v Enabled /t REG_DWORD /d 0 /f
@@ -419,32 +474,25 @@ Comprueba:
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello"
 ```
 
-Queremos:
+Para esta rama concreta buscamos:
 
 ```text
 Enabled    REG_DWORD    0x0
 ```
 
-Reinicia.
+Reinicia y vuelve a ejecutar el troubleshooter.
 
-Después:
-
-```powershell
-Get-CimInstance Win32_ComputerSystem |
-Select-Object HypervisorPresent
-```
-
-En el caso probado, este cambio finalmente produjo:
+En el equipo probado, este fue el cambio que finalmente produjo:
 
 ```text
-HypervisorPresent
------------------
-False
+HypervisorPresent = False
 ```
+
+De nuevo: fue la causa **en este caso**, no una solución universal para Windows 11.
 
 ---
 
-# 10. Comprobación final
+## Paso 10 — Comprobación final del host
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
@@ -463,13 +511,7 @@ Después:
 systeminfo
 ```
 
-En vez de:
-
-```text
-Se detectó un hipervisor.
-```
-
-deberías ver:
+En lugar del mensaje de hipervisor detectado deberían volver a aparecer las comprobaciones normales de capacidades, por ejemplo:
 
 ```text
 Extensiones de modo de monitor de VM: Sí
@@ -478,30 +520,15 @@ Traducción de direcciones de segundo nivel: Sí
 La prevención de ejecución de datos está disponible: Sí
 ```
 
-Opcional:
+Comprobación opcional del servicio:
 
 ```powershell
 sc.exe query hvhost
 ```
 
-Y VBS:
-
-```powershell
-Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard |
-Format-List VirtualizationBasedSecurityStatus,SecurityServicesConfigured,SecurityServicesRunning
-```
-
-Esperado:
-
-```text
-VirtualizationBasedSecurityStatus : 0
-SecurityServicesConfigured        : {0}
-SecurityServicesRunning           : {0}
-```
-
 ---
 
-# 11. Activar AMD-V/RVI anidado en VMware
+## Paso 11 — Activar virtualización anidada en VMware
 
 Apaga completamente la VM.
 
@@ -519,27 +546,25 @@ Activa:
 Virtualize Intel VT-x/EPT or AMD-V/RVI
 ```
 
-La misma casilla de VMware sirve para AMD-V/RVI.
-
 Inicia la VM.
+
+Si el estado del host ya es correcto, el error AMD-V/RVI no debería volver a aparecer.
 
 ---
 
-# 12. Reactivar BitLocker
-
-Si lo suspendiste:
+## Paso 12 — Reactivar BitLocker si lo suspendiste
 
 ```cmd
 manage-bde -status C:
 ```
 
-Si sigue suspendido:
+Si la protección sigue suspendida:
 
 ```cmd
 manage-bde -protectors -enable C:
 ```
 
-Comprueba nuevamente:
+Comprueba de nuevo:
 
 ```cmd
 manage-bde -status C:
@@ -547,16 +572,9 @@ manage-bde -status C:
 
 ---
 
-# Diagnóstico rápido
+## Por qué `HypervisorPresent` importa
 
-El dato decisivo es:
-
-```powershell
-Get-CimInstance Win32_ComputerSystem |
-Select-Object HypervisorPresent
-```
-
-En el caso probado llegamos a tener:
+Durante el diagnóstico original llegamos a tener este estado:
 
 ```text
 Hyper-V                   Off
@@ -569,7 +587,7 @@ PERO
 HypervisorPresent         True
 ```
 
-VMware seguía fallando.
+VMware seguía fallando con AMD-V/RVI anidado.
 
 Solo cuando Windows pasó a:
 
@@ -577,26 +595,26 @@ Solo cuando Windows pasó a:
 HypervisorPresent = False
 ```
 
-PNETLab pudo arrancar correctamente con AMD-V/RVI anidado.
+PNETLab pudo arrancar correctamente con AMD-V/RVI habilitado.
 
 ---
 
-# Advertencia de seguridad
+## Advertencia de seguridad
 
-Este procedimiento puede desactivar protecciones como:
+Esta guía puede llevar a desactivar protecciones importantes de Windows, entre ellas:
 
-- VBS
+- Virtualization-Based Security (VBS)
 - Integridad de memoria / HVCI
-- Secure Boot en algunos casos
-- Un escenario Windows Hello / Device Guard en un caso específico
+- Secure Boot en casos concretos de diagnóstico
+- un escenario Windows Hello / Device Guard en un caso específico
 
-No lo apliques indiscriminadamente en equipos corporativos, administrados o sensibles.
+No ejecutes todos los pasos a ciegas, especialmente en equipos corporativos, administrados, de producción o sensibles.
 
-Haz los cambios de forma incremental y **detente en cuanto `HypervisorPresent` sea `False`**.
+Precisamente por eso existe el troubleshooter v2: **diagnosticar → aplicar un solo paso relevante → reiniciar → diagnosticar otra vez**.
 
 ---
 
-# Referencias
+## Referencias
 
 - [Microsoft Learn — Win32_ComputerSystem / HypervisorPresent](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-computersystem)
 - [Microsoft Learn — BCDEdit /set](https://learn.microsoft.com/windows-hardware/drivers/devtest/bcdedit--set)
@@ -606,17 +624,10 @@ Haz los cambios de forma incremental y **detente en cuanto `HypervisorPresent` s
 
 ---
 
-## Contribuciones
+## Contribuciones / pedir ayuda
 
-Si funciona en otro AMD, versión de Windows o versión de VMware, abre un Issue/Discussion indicando los datos siguientes. Si puedes, adjunta también la salida de `diagnose-hypervisor.ps1` **después de revisar que no contiene información que no quieras publicar**:
+Ejecuta el troubleshooter v2 y pega su reporte sanitizado usando la plantilla **AMD-V/RVI diagnostic** de Issues del repositorio.
 
-```text
-CPU:
-Versión/build de Windows:
-Versión de VMware Workstation:
-HypervisorPresent antes:
-HypervisorPresent después:
-Paso que lo resolvió:
-```
+Consulta [SUPPORT.md](./SUPPORT.md) para seguir el flujo recomendado.
 
-No publiques claves de BitLocker, claves de producto, números de serie, correos u otros datos sensibles.
+**Nunca publiques claves de recuperación de BitLocker, contraseñas, claves de producto, números de serie, correos electrónicos ni otros datos sensibles.**
