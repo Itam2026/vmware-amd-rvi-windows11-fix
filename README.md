@@ -1,56 +1,124 @@
 # VMware Workstation: Fix `Virtualized AMD-V/RVI is not supported on this platform` on Windows 11 + AMD
 
-[**English**](./README.md) | [**Español**](./README_ES.md)
+[**English**](./README.md) | [**Español**](./README_ES.md) | [**Support / Soporte**](./SUPPORT.md)
 
-A step-by-step troubleshooting guide for **nested virtualization** on AMD hosts running VMware Workstation.
+A practical guide and **bilingual read-only troubleshooter** for VMware Workstation nested virtualization on AMD Windows 11 hosts.
 
-This is useful for workloads such as:
+Useful for workloads such as:
 
 - PNETLab
 - EVE-NG
 - GNS3 VM
 - Nested ESXi
-- Other VMs that need AMD-V/RVI exposed to the guest
+- Other VMs that require AMD-V/RVI inside VMware
 
-## 🩺 Start here: read-only diagnostic script
+---
 
-Before changing Windows settings, run the included [`diagnose-hypervisor.ps1`](./diagnose-hypervisor.ps1).
+## Start here: bilingual troubleshooter v2
 
-It checks:
-
-- AMD-V / SVM availability
-- `HypervisorPresent`
-- VBS / Device Guard status
-- Hyper-V-related optional features
-- BCD hypervisor settings
-- the Device Guard `WindowsHello` scenario
-- Secure Boot
-- BitLocker status
-- the `hvhost` service
-- recent Hyper-V hypervisor Event ID 2 entries
-
-The script is **read-only**. It does **not** change Windows, the registry, BCD, BitLocker, BIOS/UEFI, or VMware.
-
-Run it from **PowerShell as Administrator**:
+Before changing Windows settings, download and run [`diagnose-hypervisor.ps1`](./diagnose-hypervisor.ps1) from **PowerShell as Administrator**.
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\diagnose-hypervisor.ps1
 ```
 
-The execution-policy change above applies only to the current PowerShell process.
-
-If the script reports:
+The script lets the user choose:
 
 ```text
-HypervisorPresent = FALSE
+[1] Espanol
+[2] English
 ```
 
-Windows is no longer reporting a host hypervisor and you can usually skip directly to the VMware step.
+You can also force a language:
+
+```powershell
+.\diagnose-hypervisor.ps1 -Language es
+.\diagnose-hypervisor.ps1 -Language en
+```
+
+### What v2 does
+
+The troubleshooter checks the host, applies a small **rule engine**, and recommends **only the next relevant step** instead of telling everyone to disable every Windows security feature.
+
+It checks:
+
+- AMD-V / SVM firmware virtualization
+- SLAT / RVI
+- `HypervisorPresent`
+- VBS / Device Guard
+- Memory Integrity / HVCI configuration
+- Hyper-V-related optional Windows features
+- `hypervisorlaunchtype` and `vsmlaunchtype`
+- the Device Guard `WindowsHello` scenario
+- Secure Boot
+- BitLocker protection state on `C:`
+- `hvhost`
+- recent Hyper-V hypervisor Event ID 2 presence
+- VMware Workstation version when detectable
+
+Example logic:
+
+```text
+HypervisorPresent = TRUE
+VBS               = 0
+Hyper-V features  = Disabled
+BCD                = Off
+WindowsHello       = Enabled
+
+Recommendation:
+Review guide Step 9 only.
+```
+
+Then reboot, run the troubleshooter again, and continue only if necessary.
+
+### Read-only by design
+
+The diagnostic **does not change**:
+
+- Windows settings
+- Registry values
+- BCD
+- BitLocker
+- Secure Boot
+- BIOS/UEFI
+- Windows optional features
+- VMware
+
+It can optionally save a **sanitized TXT and JSON report**, but it never applies the fixes automatically.
+
+### Shareable support report
+
+At the end, the script prints a block like:
+
+```text
+--- BEGIN VMWARE AMD-V/RVI DIAGNOSTIC REPORT ---
+...
+RecommendationCode=...
+RecommendedGuideStep=...
+--- END VMWARE AMD-V/RVI DIAGNOSTIC REPORT ---
+```
+
+It intentionally excludes hostname, username, BitLocker recovery keys, product keys, and serial numbers. Review any information before publishing it.
+
+See [SUPPORT.md](./SUPPORT.md) for instructions on pasting the report into GitHub Issues, ChatGPT, Broadcom Community, or another support channel.
+
+To save the sanitized report directly:
+
+```powershell
+.\diagnose-hypervisor.ps1 -Language en -ExportReport
+```
+
+This creates:
+
+```text
+vmware-amd-rvi-report.txt
+vmware-amd-rvi-report.json
+```
 
 ---
 
-## The error
+## The VMware error
 
 VMware may show:
 
@@ -67,18 +135,18 @@ Module 'FeatureCompatLate' power on failed.
 Failed to start the virtual machine.
 ```
 
-## Key idea
+## The key diagnostic
 
 Do **not** rely only on Hyper-V being unchecked or VBS reporting `0`.
 
-The most useful check is:
+Run:
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
 Select-Object HypervisorPresent
 ```
 
-For VMware nested AMD-V/RVI, the target state is:
+For this troubleshooting path, the target state is:
 
 ```text
 HypervisorPresent
@@ -86,16 +154,16 @@ HypervisorPresent
 False
 ```
 
-If it is still `True`, Windows is still loading a hypervisor.
+If it is still `True`, Windows is still reporting a host hypervisor.
 
-> **Stop as soon as `HypervisorPresent` becomes `False`.**
-> You do not need to apply every step on every PC.
+> **Stop changing settings as soon as `HypervisorPresent` becomes `False`.**
+> Not every PC needs every step below.
 
 ---
 
 ## Tested environment
 
-This procedure was validated on:
+The procedure was validated on:
 
 - ASUS TUF Gaming A16 FA607NUG
 - AMD Ryzen 7 7445HS
@@ -103,15 +171,19 @@ This procedure was validated on:
 - VMware Workstation 26.0.0.25388281
 - PNETLab v6
 
-A second AMD Windows 11 Pro system where nested virtualization already worked was used as a comparison host during diagnosis.
+A second AMD Windows 11 Pro system where nested virtualization already worked was used as a comparison host.
 
-The final cause in the affected system was a Device Guard `WindowsHello` scenario that kept the Microsoft hypervisor loaded even after VBS had already reached `0`.
+In the affected system, the final remaining cause was a Device Guard `WindowsHello` scenario that kept the Microsoft hypervisor loaded even after VBS had reached `0`.
 
-That final registry step is **not claimed to be universal**.
+That registry finding is **not claimed to be a universal cause or universal fix**.
 
 ---
 
-# Step 1 — Verify AMD-V / SVM in firmware
+# Manual troubleshooting guide
+
+The v2 troubleshooter will normally tell you which section to use next. The manual procedure remains here for transparency and for systems where the automatic checks are incomplete.
+
+## Step 1 — Verify AMD-V / SVM in firmware
 
 Open **PowerShell as Administrator**:
 
@@ -127,7 +199,7 @@ VirtualizationFirmwareEnabled           True
 SecondLevelAddressTranslationExtensions True
 ```
 
-If `VirtualizationFirmwareEnabled` is `False`, enter BIOS/UEFI and enable one of the following, depending on your vendor:
+If firmware virtualization is `False`, enter BIOS/UEFI and enable the vendor equivalent of:
 
 ```text
 SVM Mode
@@ -139,9 +211,7 @@ CPU Virtualization
 
 ---
 
-# Step 2 — Check whether the Windows hypervisor is actually running
-
-Run:
+## Step 2 — Confirm whether the Windows hypervisor is present
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
@@ -154,19 +224,19 @@ Also run:
 systeminfo
 ```
 
-If the end of `systeminfo` says:
+If `systeminfo` says:
 
 ```text
 A hypervisor has been detected.
 ```
 
-Windows is still loading its hypervisor.
+Windows is still loading/reporting one.
 
-If `HypervisorPresent` is already `False`, skip to **Step 10**.
+If `HypervisorPresent` is already `False`, skip to **Step 11**.
 
 ---
 
-# Step 3 — Disable Memory Integrity
+## Step 3 — Disable Memory Integrity when it is part of the blocker
 
 Go to:
 
@@ -184,13 +254,13 @@ Turn off:
 Memory integrity
 ```
 
+Reboot when required and re-run the diagnostic.
+
 ---
 
-# Step 4 — Disable VBS in Group Policy
+## Step 4 — Disable VBS through Group Policy
 
-> This is easiest on Windows 11 Pro.
-
-Press `Win + R`, run:
+On Windows 11 Pro, press `Win + R` and run:
 
 ```text
 gpedit.msc
@@ -217,11 +287,11 @@ Set it to:
 Disabled
 ```
 
-Apply and close.
+Apply, reboot if required, and re-run the diagnostic.
 
 ---
 
-# Step 5 — Disable Windows virtualization features
+## Step 5 — Disable conflicting Windows virtualization features
 
 Press `Win + R` and run:
 
@@ -229,7 +299,7 @@ Press `Win + R` and run:
 optionalfeatures
 ```
 
-Make sure these are disabled if present:
+For this VMware nested-virtualization troubleshooting path, disable conflicting features if they are enabled:
 
 ```text
 Hyper-V
@@ -239,7 +309,7 @@ Windows Sandbox
 Windows Subsystem for Linux
 ```
 
-You can verify the actual feature state with PowerShell:
+You can verify the state with PowerShell:
 
 ```powershell
 Get-WindowsOptionalFeature -Online |
@@ -247,15 +317,11 @@ Where-Object {$_.FeatureName -match "Hyper-V|VirtualMachinePlatform|HypervisorPl
 Select-Object FeatureName,State
 ```
 
-The relevant entries should report:
-
-```text
-Disabled
-```
+Reboot and re-run the diagnostic.
 
 ---
 
-# Step 6 — Stop Windows from launching the hypervisor
+## Step 6 — Stop Windows from launching the hypervisor through BCD
 
 Open **Command Prompt as Administrator**:
 
@@ -270,36 +336,32 @@ Verify:
 bcdedit /enum {current}
 ```
 
-Expected:
+When explicitly configured, the target is:
 
 ```text
 hypervisorlaunchtype    Off
 vsmlaunchtype           Off
 ```
 
-Restart Windows.
-
-Then re-check:
+Restart Windows, then re-check:
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
 Select-Object HypervisorPresent
 ```
 
-If it is now `False`, skip to **Step 10**.
+If it is now `False`, skip to **Step 11**.
 
 ---
 
-# Step 7 — Check VBS directly
-
-Open **PowerShell as Administrator**:
+## Step 7 — Check VBS directly
 
 ```powershell
 Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard |
 Format-List VirtualizationBasedSecurityStatus,CodeIntegrityPolicyEnforcementStatus,SecurityServicesConfigured,SecurityServicesRunning
 ```
 
-A fully disabled VBS state should normally include:
+A disabled VBS state normally includes:
 
 ```text
 VirtualizationBasedSecurityStatus : 0
@@ -315,9 +377,9 @@ VBS is still running.
 
 ---
 
-# Step 8 — If VBS is still running, investigate Secure Boot
+## Step 8 — If VBS refuses to stop, investigate Secure Boot carefully
 
-> **Do not change Secure Boot without checking BitLocker first.**
+> **Do not change Secure Boot before checking BitLocker.**
 
 Check BitLocker:
 
@@ -325,9 +387,9 @@ Check BitLocker:
 manage-bde -status C:
 ```
 
-If protection is active, make sure you have access to your **BitLocker recovery key** before continuing.
+If protection is active, make sure you have access to your **BitLocker recovery key** before continuing. Never post that key publicly.
 
-To temporarily suspend BitLocker protectors for two reboots:
+To temporarily suspend protectors for two reboots:
 
 ```cmd
 manage-bde -protectors -disable C: -RebootCount 2
@@ -339,58 +401,29 @@ Verify:
 manage-bde -status C:
 ```
 
-The drive should remain encrypted, while protection is temporarily suspended.
+The drive remains encrypted while the protectors are temporarily suspended.
 
-Now enter BIOS/UEFI.
-
-Keep:
+In BIOS/UEFI, keep:
 
 ```text
 SVM / AMD-V = Enabled
 ```
 
-As a troubleshooting test, disable:
+As a troubleshooting test only, Secure Boot can be disabled on systems where VBS refuses to turn off.
 
-```text
-Secure Boot
-```
-
-Save and reboot.
-
-Verify from PowerShell:
+Verify after boot:
 
 ```powershell
 Confirm-SecureBootUEFI
 ```
 
-Expected for this test:
+Then re-check VBS and `HypervisorPresent`.
 
-```text
-False
-```
-
-Check VBS again:
-
-```powershell
-Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard |
-Format-List VirtualizationBasedSecurityStatus,SecurityServicesConfigured,SecurityServicesRunning
-```
-
-Then re-check:
-
-```powershell
-Get-CimInstance Win32_ComputerSystem |
-Select-Object HypervisorPresent
-```
-
-If `False`, skip to **Step 10**.
-
-> Secure Boot is **not universally incompatible with VMware**.
-> This is only a troubleshooting branch for systems where VBS refuses to turn off.
+> Secure Boot is **not universally incompatible with VMware**. Do not disable it unless the diagnostic state actually points to this branch.
 
 ---
 
-# Step 9 — Windows 11 24H2 / 25H2: check the Device Guard `WindowsHello` scenario
+## Step 9 — Windows 11 24H2 / 25H2: Device Guard `WindowsHello` scenario
 
 This was the final missing piece in the tested system.
 
@@ -400,7 +433,7 @@ Check:
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello"
 ```
 
-If the key does not exist, do not create it just because this guide mentions it.
+If the key does not exist, **do not create it just because this guide mentions it**.
 
 If it exists and shows:
 
@@ -408,11 +441,9 @@ If it exists and shows:
 Enabled    REG_DWORD    0x1
 ```
 
-and **all previous steps have already been completed but `HypervisorPresent` is still `True`**, you can test disabling this scenario.
+and the previous blockers are already cleared while `HypervisorPresent` remains `True`, this scenario can be investigated.
 
-### Before changing it
-
-Go to:
+Before changing it, go to:
 
 ```text
 Settings
@@ -428,11 +459,9 @@ For improved security, only allow Windows Hello sign-in
 for Microsoft accounts on this device
 ```
 
-Do **not** delete your PIN.
+Do **not** delete your PIN. Make sure you know the password for your Windows/Microsoft account.
 
-Make sure you know the password for your Windows/Microsoft account so you have a fallback sign-in method.
-
-Then open **Command Prompt as Administrator**:
+Then, from **Command Prompt as Administrator**:
 
 ```cmd
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello" /v Enabled /t REG_DWORD /d 0 /f
@@ -444,34 +473,25 @@ Verify:
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello"
 ```
 
-Expected:
+Expected for this tested branch:
 
 ```text
 Enabled    REG_DWORD    0x0
 ```
 
-Restart Windows.
-
-Now run:
-
-```powershell
-Get-CimInstance Win32_ComputerSystem |
-Select-Object HypervisorPresent
-```
+Restart Windows and run the troubleshooter again.
 
 In the tested system, this was the change that finally produced:
 
 ```text
-HypervisorPresent
------------------
-False
+HypervisorPresent = False
 ```
+
+Again: this was the cause **in this case**, not a universal Windows 11 fix.
 
 ---
 
-# Step 10 — Final verification
-
-Run:
+## Step 10 — Final host verification
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
@@ -490,13 +510,7 @@ Then:
 systeminfo
 ```
 
-Instead of:
-
-```text
-A hypervisor has been detected.
-```
-
-you should see the normal virtualization capability checks, such as:
+Instead of the hypervisor-detected message, the normal capability checks should be visible, such as:
 
 ```text
 VM Monitor Mode Extensions: Yes
@@ -505,32 +519,15 @@ Second Level Address Translation: Yes
 Data Execution Prevention Available: Yes
 ```
 
-Optional service check from PowerShell:
+Optional service check:
 
 ```powershell
 sc.exe query hvhost
 ```
 
-On a host where the Microsoft hypervisor is not running, `hvhost` should normally be stopped.
-
-You can also re-check VBS:
-
-```powershell
-Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard |
-Format-List VirtualizationBasedSecurityStatus,SecurityServicesConfigured,SecurityServicesRunning
-```
-
-Expected:
-
-```text
-VirtualizationBasedSecurityStatus : 0
-SecurityServicesConfigured        : {0}
-SecurityServicesRunning           : {0}
-```
-
 ---
 
-# Step 11 — Enable nested virtualization in VMware
+## Step 11 — Enable nested virtualization in VMware
 
 Fully power off the VM.
 
@@ -548,17 +545,13 @@ Enable:
 Virtualize Intel VT-x/EPT or AMD-V/RVI
 ```
 
-The same VMware checkbox is used for AMD-V/RVI.
-
 Start the VM.
 
-The error should no longer appear.
+If the host state is correct, the AMD-V/RVI error should no longer appear.
 
 ---
 
-# Step 12 — Re-enable BitLocker protection
-
-If you suspended BitLocker:
+## Step 12 — Re-enable BitLocker protection if you suspended it
 
 ```cmd
 manage-bde -status C:
@@ -570,23 +563,17 @@ If protection is still suspended:
 manage-bde -protectors -enable C:
 ```
 
-Verify:
+Verify again:
 
 ```cmd
 manage-bde -status C:
 ```
 
-Expected:
-
-```text
-Protection Status: Protection On
-```
-
 ---
 
-# Why `HypervisorPresent` matters
+## Why `HypervisorPresent` matters
 
-The most important lesson from this troubleshooting case was:
+The important state observed during the original troubleshooting was:
 
 ```text
 Hyper-V feature            Off
@@ -607,30 +594,26 @@ Only after Windows reported:
 HypervisorPresent = False
 ```
 
-did VMware successfully start the nested PNETLab VM with AMD-V/RVI enabled.
-
-Microsoft documents `Win32_ComputerSystem.HypervisorPresent` as a Boolean indicating whether a hypervisor is present.
+did the nested PNETLab VM start successfully with AMD-V/RVI enabled.
 
 ---
 
-# Security warning
+## Security warning
 
-This guide can involve disabling security features such as:
+This guide can lead to disabling meaningful Windows protections, including:
 
 - Virtualization-Based Security (VBS)
 - Memory Integrity / HVCI
-- Secure Boot in some troubleshooting cases
-- A Windows Hello / Device Guard scenario in a specific edge case
+- Secure Boot in specific troubleshooting cases
+- a Windows Hello / Device Guard scenario in a specific edge case
 
-Those changes reduce some Windows security protections.
+Do not apply every step blindly, especially on corporate, managed, production, or security-sensitive systems.
 
-Do not apply them blindly to corporate, managed, production, or security-sensitive systems.
-
-Use the guide incrementally and **stop as soon as `HypervisorPresent` becomes `False`**.
+The v2 troubleshooter exists specifically to reduce unnecessary changes: **diagnose → apply one relevant step → reboot → diagnose again**.
 
 ---
 
-# References
+## References
 
 - [Microsoft Learn — Win32_ComputerSystem / HypervisorPresent](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-computersystem)
 - [Microsoft Learn — BCDEdit /set](https://learn.microsoft.com/windows-hardware/drivers/devtest/bcdedit--set)
@@ -640,17 +623,10 @@ Use the guide incrementally and **stop as soon as `HypervisorPresent` becomes `F
 
 ---
 
-## Contributing
+## Contributing / requesting help
 
-If this guide works on a different AMD CPU, Windows build, laptop model, or VMware Workstation version, please open an Issue or Discussion and include the following. If useful, you can also attach the output of `diagnose-hypervisor.ps1` **after reviewing it for information you do not want to publish**:
+Run the v2 troubleshooter and paste its sanitized report into the repository's **AMD-V/RVI diagnostic** Issue template.
 
-```text
-CPU:
-Windows version/build:
-VMware Workstation version:
-HypervisorPresent before:
-HypervisorPresent after:
-Which step fixed it:
-```
+See [SUPPORT.md](./SUPPORT.md) for the recommended workflow.
 
-Please **do not post BitLocker recovery keys, product keys, serial numbers, email addresses, or other sensitive information**.
+Please **never post BitLocker recovery keys, passwords, product keys, serial numbers, email addresses, or other sensitive information**.
