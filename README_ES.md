@@ -1,5 +1,7 @@
 # VMware Workstation: solución a `Virtualized AMD-V/RVI is not supported on this platform` en Windows 11 + AMD
 
+[**English**](./README.md) | [**Español**](./README_ES.md)
+
 Guía paso a paso para recuperar la **virtualización anidada AMD-V/RVI** en VMware Workstation.
 
 Útil para:
