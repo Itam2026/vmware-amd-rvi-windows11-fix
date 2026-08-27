@@ -1,5 +1,7 @@
 # VMware Workstation: Fix `Virtualized AMD-V/RVI is not supported on this platform` on Windows 11 + AMD
 
+[**English**](./README.md) | [**Español**](./README_ES.md)
+
 A step-by-step troubleshooting guide for **nested virtualization** on AMD hosts running VMware Workstation.
 
 This is useful for workloads such as:
